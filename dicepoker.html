@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>Dice Poker</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f5f5f5;
+      text-align: center;
+      margin: 0;
+      padding: 20px;
+    }
+
+    table {
+      border-collapse: collapse;
+      margin: 20px auto;
+      background: #fff;
+      box-shadow: 0 2px 8px #ccc;
+      text-align: center;
+      user-select: none;
+    }
+
+    th,
+    td {
+      border: 1px solid #bbb;
+      padding: 6px 10px;
+      min-width: 60px;
+      position: relative;
+    }
+
+    th {
+      background: #f0f0f0;
+      cursor: default;
+      font-weight: bold;
+    }
+
+    input[type="text"] {
+      width: 90%;
+      text-align: center;
+      border: none;
+      background: #f9f9f9;
+      font-weight: bold;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    input[type="text"]:focus {
+      outline: none;
+      background: #e0f7fa;
+    }
+
+    .readonly {
+      background: #f0f0f0;
+      font-weight: bold;
+      cursor: default;
+      user-select: none;
+    }
+
+    #diceContainer {
+      margin: 20px auto;
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+    }
+
+    #diceContainer img {
+      cursor: pointer;
+      width: 60px;
+      user-select: none;
+      border: 2px solid transparent;
+      border-radius: 6px;
+      transition: border-color 0.3s;
+    }
+
+    #diceContainer img.selected {
+      border-color: red;
+    }
+
+    #rollBtn {
+      margin: 10px auto;
+      padding: 10px 30px;
+      font-size: 1.2rem;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .highlight {
+      border: 2px solid red !important;
+      background-color: #ffffcc !important;
+    }
+
+    #info {
+      margin-top: 10px;
+      font-size: 1rem;
+      color: #555;
+      min-height: 1.4em;
+      user-select: none;
+    }
+
+    label,
+    button,
+    input[type="number"] {
+      font-size: 1rem;
+      user-select: none;
+    }
+
+    /* NEW: Стили для текущего игрока */
+    .current-player-cell {
+      position: relative;
+    }
+
+    .current-player-cell::after {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      box-shadow: 0 0 0 3px #4CAF50 inset;
+      pointer-events: none;
+    }
+
+    .current-player-name {
+      color: #FF5722;
+      font-weight: bold;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>Dice Poker</h1>
+  <label>Количество игроков:
+    <input type="number" id="numPlayers" min="1" max="16" value="2" style="width:50px;">
+  </label>
+  <button onclick="startGame()">Начать игру</button>
+
+  <div id="currentPlayer" style="margin-top: 20px; font-size: 1.2rem; font-weight: bold;"></div>
+  <div id="diceContainer"></div>
+  <button id="rollBtn" onclick="rollDice()">Бросить кости</button>
+  <div>Осталось бросков: <span id="rollsLeft">3</span></div>
+  <div id="info"></div>
+  <div id="gameContainer"></div>
+
+  <script>
+    // Категории для таблицы
+    const ROWS = [
+      { label: "1", color: "#fff0f0", editable: true, group: "school" },
+      { label: "2", color: "#fff0f0", editable: true, group: "school" },
+      { label: "3", color: "#fff0f0", editable: true, group: "school" },
+      { label: "4", color: "#fff0f0", editable: true, group: "school" },
+      { label: "5", color: "#fff0f0", editable: true, group: "school" },
+      { label: "6", color: "#fff0f0", editable: true, group: "school" },
+      { label: "Итог школа", color: "#fff0f0", editable: false, group: "schoolTotal" },
+      { label: "1 Пара", color: "#fffff0", editable: true },
+      { label: "2 Пары", color: "#fffff0", editable: true },
+      { label: "Тройка", color: "#fffff0", editable: true },
+      { label: "Квадрат", color: "#fffff0", editable: true },
+      { label: "Лесница", color: "#f0f0ff", editable: true },
+      { label: "Сумма", color: "#f0f0ff", editable: true },
+      { label: "Фукс", color: "#f0f0ff", editable: true },
+      { label: "Покер", color: "#f0f0ff", editable: true },
+      { label: "Общий итог", color: "#f0fff0", editable: false, group: "grandTotal" }
+    ];
+
+    let numPlayers = 2;
+    let currentPlayer = 0;
+    let rollsLeft = 3;
+    const diceCount = 5;
+    let diceValues = Array(diceCount).fill(1);
+    let diceSelected = Array(diceCount).fill(false);
+    let scores = [];
+    let gameStarted = false;
+    let players = []; // Теперь будет хранить {name: string, scores: any[]}
+
+    // Запуск игры
+    function startGame() {
+      numPlayers = Math.max(1, Math.min(16, parseInt(document.getElementById('numPlayers').value) || 2));
+      currentPlayer = 0;
+      rollsLeft = 3;
+      diceValues = Array(diceCount).fill(1);
+      diceSelected = Array(diceCount).fill(false);
+      scores = Array(numPlayers).fill(null).map(() => Array(ROWS.length).fill(null));
+      gameStarted = true;
+
+      updateCurrentPlayerDisplay();
+      generateTable();
+      renderDice();
+      updateRollsLeft();
+      clearHighlights();
+      showInfo(`Игрок ${currentPlayer + 1}, бросайте кости!`);
+      players = Array(numPlayers).fill().map((_, i) => ({
+        name: `Игрок ${i + 1}`,
+        scores: Array(ROWS.length).fill(null)
+      }));
+    }
+
+    // Отобразить текущего игрока
+    function updateCurrentPlayerDisplay() {
+      const player = players[currentPlayer];
+      document.getElementById('currentPlayer').innerHTML =
+        `Ход: <span class="current-player-name">${player.name}</span>`;
+      generateTable(); // Перерисовываем таблицу для обновления подсветки
+    }
+
+    // Обновить счётчик бросков и кнопку
+    function updateRollsLeft() {
+      document.getElementById('rollsLeft').textContent = rollsLeft;
+      document.getElementById('rollBtn').disabled = (rollsLeft === 0);
+    }
+
+    // Создать таблицу очков
+   function generateTable() {
+  const table = document.createElement('table');
+  
+  // Создаем строку с заголовками игроков
+  const headerRow = document.createElement('tr');
+  headerRow.innerHTML = '<td bgcolor="#f0f0f0">Категория</td>';
+  
+  players.forEach((player, p) => {
+    const th = document.createElement('th');
+    if (p === currentPlayer) th.classList.add('current-player-cell');
+    
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = player.name;
+    input.id = `playerName_${p}`;
+    input.oninput = () => updatePlayerName(p);
+    th.appendChild(input);
+    
+    headerRow.appendChild(th);
+  });
+  table.appendChild(headerRow);
+
+  // Создаем строки с категориями
+  ROWS.forEach((row, r) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td bgcolor="${row.color}">${row.label}</td>`;
+    
+    players.forEach((player, p) => {
+      const td = document.createElement('td');
+      if (row.editable) {
+        td.onclick = () => onCategoryClick(r, p);
+        td.style.cursor = 'pointer';
+        
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.readOnly = true;
+        input.value = formatScore(player.scores[r]);
+        input.id = `cell_${r}_${p}`;
+        td.appendChild(input);
+      } else {
+        td.className = 'readonly';
+        td.textContent = getTotalForCategoryGroup(p, row.group);
+      }
+      td.id = `bgcell_${r}_${p}`;
+      td.bgColor = row.color;
+      tr.appendChild(td);
+    });
+    
+    table.appendChild(tr);
+  });
+
+  const container = document.getElementById('gameContainer');
+  container.innerHTML = '';
+  container.appendChild(table);
+}
+
+    // NEW: Форматирование очков для отображения
+    function formatScore(score) {
+      if (score === null) return '';
+      if (score === "—") return score;
+      if (typeof score === 'string' && (score.startsWith('+') || score.startsWith('-'))) return score;
+      return score.toString();
+    }
+
+    // Итоги для групп
+    function getTotalForCategoryGroup(player, group) {
+      if (!group) return '';
+
+      // NEW: Проверка заполненности всех рубрик группы
+      const isFilled = {
+        'schoolTotal': [0, 1, 2, 3, 4, 5].every(r => scores[player][r] !== null),
+        'grandTotal': Array.from({ length: 16 }, (_, i) => i).every(r => scores[player][r] !== null)
+      };
+
+      if (!isFilled[group]) return '';
+
+      if (group === 'schoolTotal') {
+        let sum = 0;
+        for (let r = 0; r <= 5; r++) {
+          const score = scores[player][r];
+          if (score === null) continue;
+          if (typeof score === 'number') sum += score;
+          else if (score.startsWith('+')) sum += parseInt(score.slice(1));
+          else if (score.startsWith('-')) sum -= parseInt(score.slice(1));
+        }
+        scores[player][6] = sum * 10; // UPDATED: Умножаем на 10
+        return sum * 10;
+      }
+      if (group === 'grandTotal') {
+        let school = scores[player][6] || 0;
+        let other = 0;
+        for (let r = 7; r <= 14; r++) {
+          if (scores[player][r] !== null) other += scores[player][r];
+        }
+        let grand = school + other;
+        scores[player][15] = grand;
+        return grand;
+      }
+      return '';
+    }
+
+    // Обновить имя игрока
+    function updatePlayerName(p) {
+      const input = document.getElementById(`playerName_${p}`);
+      if (input) {
+        players[p].name = input.value.trim().slice(0, 15);
+        if (p === currentPlayer) updateCurrentPlayerDisplay();
+      }
+    }
+
+    // Отобразить кости
+    function renderDice() {
+      const container = document.getElementById('diceContainer');
+      container.innerHTML = '';
+      for (let i = 0; i < diceCount; i++) {
+        const img = document.createElement('img');
+        img.src = getDiceImage(diceValues[i]);
+        img.alt = diceValues[i];
+        img.title = `Кость ${i + 1}: ${diceValues[i]}`;
+        if (diceSelected[i]) img.classList.add('selected');
+        img.onclick = () => {
+          if (rollsLeft === 3 && diceValues.every(v => v === 1)) return;
+          diceSelected[i] = !diceSelected[i];
+          img.classList.toggle('selected');
+        };
+        container.appendChild(img);
+      }
+    }
+
+    function getDiceImage(value) {
+      const diceEmojis = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
+      return `data:image/svg+xml;utf8,` + encodeURIComponent(
+        `<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60">
+          <rect width="60" height="60" fill="#fff" stroke="#000" rx="8" ry="8"/>
+          <text x="30" y="40" font-size="36" text-anchor="middle" fill="#000">${diceEmojis[value - 1]}</text>
+        </svg>`
+      );
+    }
+
+    // Бросить кости
+    function rollDice() {
+      if (rollsLeft === 0) {
+        const hasEmptyCategories = scores[currentPlayer].some((s, i) => ROWS[i].editable && s === null);
+        if (!hasEmptyCategories) {
+          nextPlayerTurn();
+          return;
+        }
+        // ... остальная обработка
+      }
+
+      for (let i = 0; i < diceCount; i++) {
+        if (!diceSelected[i]) {
+          diceValues[i] = Math.floor(Math.random() * 6) + 1;
+        }
+      }
+      rollsLeft--;
+      updateRollsLeft();
+      renderDice();
+      showInfo(`Бросок сделан. Осталось бросков: ${rollsLeft}. Выбирайте кости для сохранения.`);
+
+      // NEW: Подсвечиваем категории после любого броска (не только последнего)
+      highlightCategories();
+    }
+
+    // Подсвечивает категории с возможными очками
+    function highlightCategories() {
+      clearHighlights();
+      for (let r = 0; r < ROWS.length; r++) {
+        if (!ROWS[r].editable) continue;
+        if (scores[currentPlayer][r] !== null) continue;
+
+        let score = calculateScoreForCategory(r, diceValues);
+        if (score !== null && score !== 0) {
+          const bgcell = document.getElementById(`bgcell_${r}_${currentPlayer}`);
+          if (bgcell) {
+            bgcell.classList.add('highlight');
+            const input = document.getElementById(`cell_${r}_${currentPlayer}`);
+            if (input) input.value = formatScore(score);
+          }
+        }
+      }
+    }
+
+    // Снять подсветку
+    function clearHighlights() {
+      for (let p = 0; p < numPlayers; p++) {
+        for (let r = 0; r < ROWS.length; r++) {
+          const bgcell = document.getElementById(`bgcell_${r}_${p}`);
+          if (bgcell) bgcell.classList.remove('highlight');
+          const input = document.getElementById(`cell_${r}_${p}`);
+          if (input && scores[p][r] === null) {
+            input.value = '';
+          }
+        }
+      }
+    }
+
+    // Выбор категории для записи очков
+    // Заменяем всю функцию onCategoryClick:
+    function onCategoryClick(row, player) {
+      if (!gameStarted) {
+        showInfo("Сначала начните игру.");
+        return;
+      }
+      if (player !== currentPlayer) {
+        showInfo(`Сейчас ход игрока ${currentPlayer + 1}.`);
+        return;
+      }
+      if (!ROWS[row].editable) {
+        showInfo("Эта категория не редактируется.");
+        return;
+      }
+      if (scores[player][row] !== null) {
+        showInfo("Эта категория уже заполнена.");
+        return;
+      }
+
+      // Вычисляем очки (null для прочерка "-" в школе)
+      let score = calculateScoreForCategory(row, diceValues);
+      if (score === null) score = "—"; // Прочерк для школы при 3 кубиках
+
+      // Записываем очки
+      scores[player][row] = score;
+
+      // Всегда переключаем игрока после выбора категории
+      nextPlayerTurn();
+    }
+
+    // Переключение хода
+    function nextPlayerTurn() {
+      // Проверяем, не заполнены ли все категории
+      const allCategoriesFilled = scores[currentPlayer].every(
+        (score, i) => !ROWS[i].editable || score !== null
+      );
+
+      if (allCategoriesFilled) {
+        showInfo(`Игрок ${currentPlayer + 1} заполнил все категории!`);
+      }
+
+      // Сброс состояния и переход хода
+      clearHighlights();
+      rollsLeft = 3;
+      diceValues = Array(diceCount).fill(1);
+      diceSelected = Array(diceCount).fill(false);
+
+      // Переход к следующему игроку (или завершение игры)
+      currentPlayer = (currentPlayer + 1) % numPlayers;
+      updateCurrentPlayerDisplay();
+      renderDice();
+      updateRollsLeft();
+
+      const name = document.getElementById(`playerName_${currentPlayer}`)?.value || `Игрок ${currentPlayer + 1}`;
+      showInfo(`${name}, ваш ход. Бросайте кости!`);
+    }
+
+    // Отобразить сообщение
+    function showInfo(text) {
+      document.getElementById('info').textContent = text;
+    }
+
+    // Расчёт очков для категории
+    function calculateScoreForCategory(row, dice) {
+      if (!dice || dice.length !== diceCount) return null;
+      const counts = [0, 0, 0, 0, 0, 0];
+      dice.forEach(d => counts[d - 1]++);
+      const sumAll = dice.reduce((a, b) => a + b, 0);
+      const isFirstRoll = (rollsLeft === 2);
+
+      switch (row) {
+        // NEW: Школа (1-6)
+        case 0: case 1: case 2: case 3: case 4: case 5: {
+          const value = row + 1; // 1-6
+          const cnt = counts[row];
+          if (cnt >= 4) return cnt === 5 ? `+${value * 20}` : `+${value * 10}`;
+          if (cnt === 3) return "—";
+          if (cnt === 2) return `-${value * 10}`;
+          if (cnt === 1) return `-${value * 20}`;
+          return 0;
+        }
+
+        // "1 Пара" - сумма двух одинаковых
+        case 7: {
+          let pairs = counts.map((c, i) => c >= 2 ? (i + 1) * 2 : 0);
+          return Math.max(...pairs);
+        }
+
+        // "2 Пары" - сумма двух пар
+        case 8: {
+          let pairs = counts.map((c, i) => c >= 2 ? (i + 1) * 2 : 0)
+            .filter(x => x > 0)
+            .sort((a, b) => b - a);
+          return pairs.length >= 2 ? pairs[0] + pairs[1] : 0;
+        }
+
+        // "Тройка" - сумма трёх одинаковых
+        case 9: {
+          for (let i = 5; i >= 0; i--) {
+            if (counts[i] >= 3) return (i + 1) * 3;
+          }
+          return 0;
+        }
+
+        // "Квадрат" - сумма четырёх одинаковых
+        case 10: {
+          for (let i = 5; i >= 0; i--) {
+            if (counts[i] >= 4) return (i + 1) * 4;
+          }
+          return 0;
+        }
+
+        // "Лесница" - 1-5 или 2-6
+        case 11: {
+          const uniqueSorted = [...new Set(dice)].sort((a, b) => a - b);
+          const isSmall = [1, 2, 3, 4, 5].every(v => uniqueSorted.includes(v));
+          const isLarge = [2, 3, 4, 5, 6].every(v => uniqueSorted.includes(v));
+          const score = (isSmall || isLarge) ? sumAll : 0;
+          return isFirstRoll ? score * 2 : score;
+        }
+
+        // "Сумма" - сумма всех костей
+        case 12: {
+          return isFirstRoll ? sumAll * 2 : sumAll;
+        }
+
+        // "Фукс" - 3+2 одинаковых
+        case 13: {
+          const hasThree = counts.some(c => c === 3);
+          const hasTwo = counts.some(c => c === 2);
+          const score = hasThree && hasTwo ? sumAll : 0;
+          return isFirstRoll ? score * 2 : score;
+        }
+
+        // "Покер" - 5 одинаковых ×100
+        case 14: {
+          const pokerValue = counts.findIndex(c => c === 5) + 1;
+          return pokerValue !== -1 ? pokerValue * 100 : 0;
+        }
+      }
+      return null;
+    }
+  </script>
+</body>
+
+</html>
